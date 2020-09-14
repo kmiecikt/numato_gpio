@@ -80,18 +80,64 @@ defmodule Numato.Responses do
 
   ## Examples
 
-    iex> Numato.Responses.parse_gpio_notify("01020304 05060708 FAFBFCFD\r\n")
+    iex> Numato.Responses.parse_gpio_notify_event("01020304 05060708 FAFBFCFD\r\n")
     {<<1, 2, 3, 4>>, <<5, 6, 7, 8>>, <<250, 251, 252, 253>>}
 
-    iex> Numato.Responses.parse_gpio_notify("0010123")
-    {:error, "Invalid notify result: expected three 32-bit hexadecimal integers"}
+    iex> Numato.Responses.parse_gpio_notify_event("0010123")
+    {:error, "Invalid notification format: expected three 32-bit hexadecimal integers"}
   """
-  def parse_gpio_notify(line) do
+  def parse_gpio_notify_event(line) do
     parts = String.split(line) |> Enum.map(&parse_hex_value/1)
     case parts do
       [current, previous, iodir] when is_bitstring(current) and is_bitstring(previous) and is_bitstring(iodir)
         -> {current, previous, iodir}
-      _ -> {:error, "Invalid notify result: expected three 32-bit hexadecimal integers"}
+      _ -> {:error, "Invalid notification format: expected three 32-bit hexadecimal integers"}
+    end
+  end
+
+  @doc ~S"""
+  Parses result of the gpio notify command.
+
+  ## Examples
+
+    iex> Numato.Responses.parse_gpio_notify_status("on")
+    true
+
+    iex> Numato.Responses.parse_gpio_notify_status("off\r\n")
+    false
+
+    iex> Numato.Responses.parse_gpio_notify_status("true")
+    {:error, "Invalid notify status: expected 'on' or 'off', got 'true'"}
+  """
+  def parse_gpio_notify_status(line) do
+    trimmed = String.trim(line)
+    case trimmed do
+      "on"  -> true
+      "off" -> false
+      other -> {:error, "Invalid notify status: expected 'on' or 'off', got '#{other}'"}
+    end
+  end
+
+  @doc ~S"""
+  Parses result of the adc read command and returns and integer in range [0..1023]
+
+  ## Examples
+
+    iex> Numato.Responses.parse_adc_read("1")
+    1
+
+    iex> Numato.Responses.parse_adc_read("1023")
+    1023
+
+    iex> Numato.Responses.parse_adc_read("2048")
+    {:error, "Invalid adc value: expected integer between 0 and 1023, got '2048'"}
+  """
+  def parse_adc_read(line) do
+    value = line |> String.trim() |> String.to_integer()
+    if value >= 0 and value <= 1023 do
+      value
+    else
+      {:error, "Invalid adc value: expected integer between 0 and 1023, got '#{line}'"}
     end
   end
 
