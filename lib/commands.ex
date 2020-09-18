@@ -20,16 +20,16 @@ defmodule Numato.Commands do
   Creates command for setting or clearing a single GPIO.
   ## Examples:
 
-    iex> Numato.Commands.gpio_set(1, 1)
-    "gpio set 1"
+    iex> Numato.Commands.gpio_set(13, 1)
+    "gpio set D"
 
     iex> Numato.Commands.gpio_set(2, 0)
     "gpio clear 2"
   """
   def gpio_set(gpio, state) when is_integer(gpio) and is_integer(state) do
     case state do
-      0 -> "gpio clear #{gpio}"
-      1 -> "gpio set #{gpio}"
+      0 -> "gpio clear #{gpio_number_to_id(gpio)}"
+      1 -> "gpio set #{gpio_number_to_id(gpio)}"
     end
   end
 
@@ -42,7 +42,7 @@ defmodule Numato.Commands do
     "gpio read 3"
   """
   def gpio_read(gpio) do
-    "gpio read #{gpio}"
+    "gpio read #{gpio_number_to_id(gpio)}"
   end
 
   @doc ~S"""
@@ -51,10 +51,10 @@ defmodule Numato.Commands do
   ## Examples
 
     iex> Numato.Commands.gpio_iomask(<<255, 1, 254, 2>>)
-    "gpio iomask FF01FE02"
+    "gpio iomask ff01fe02"
   """
   def gpio_iomask(iomask) when is_bitstring(iomask) and bit_size(iomask) == 32 do
-    "gpio iomask #{Base.encode16(iomask)}"
+    "gpio iomask #{Base.encode16(iomask) |> String.downcase()}"
   end
 
   @doc ~S"""
@@ -63,10 +63,10 @@ defmodule Numato.Commands do
   ## Examples
 
     iex> Numato.Commands.gpio_iodir(<<254, 2, 255, 1>>)
-    "gpio iodir FE02FF01"
+    "gpio iodir fe02ff01"
   """
   def gpio_iodir(iodir) do
-    "gpio iodir #{Base.encode16(iodir)}"
+    "gpio iodir #{Base.encode16(iodir) |> String.downcase()}"
   end
 
   @doc ~S"""
@@ -116,10 +116,10 @@ defmodule Numato.Commands do
   ## Examples
 
     iex> Numato.Commands.gpio_writeall(<<255, 254, 253, 252>>)
-    "gpio writeall FFFEFDFC"
+    "gpio writeall fffefdfc"
   """
   def gpio_writeall(values) when is_bitstring(values) and bit_size(values) == 32 do
-    "gpio writeall #{Base.encode16(values)}"
+    "gpio writeall #{Base.encode16(values) |> String.downcase()}"
   end
 
   @doc ~S"""
@@ -130,7 +130,15 @@ defmodule Numato.Commands do
     iex> Numato.Commands.adc_read(1)
     "adc read 1"
   """
-  def adc_read(input) when is_integer(input) do
-    "adc read #{input}"
+  def adc_read(gpio) when is_integer(gpio) do
+    "adc read #{gpio_number_to_id(gpio)}"
+  end
+
+  defp gpio_number_to_id(gpio) when gpio <= 9 do
+    "#{gpio}"
+  end
+
+  defp gpio_number_to_id(gpio) when gpio > 9 do
+    <<?A + gpio - 10>>
   end
 end
