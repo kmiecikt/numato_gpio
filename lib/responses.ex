@@ -1,150 +1,158 @@
 defmodule Numato.Responses do
   @doc ~S"""
-  Parses result of ver command.
+  Parser response received from COM port.
 
   ## Examples
 
-    iex> Numato.Responses.parse_ver("1.2.3\r\n")
-    "1.2.3"
+    iex> Numato.Responses.parse("1.2.3\r\n")
+    {:version, "1.2.3"}
+
+    iex> Numato.Responses.parse("ABCDZDFF")
+    {:id, "ABCDZDFF"}
+
+    iex> Numato.Responses.parse("on")
+    :on
+
+    iex> Numato.Responses.parse("off")
+    :off
+
+    iex> Numato.Responses.parse("0102FFFE")
+    {:bits, <<1, 2, 255, 254>>}
+
+    iex> Numato.Responses.parse("1023")
+    {:int, 1023}
+
+    iex> Numato.Responses.parse("01020304 FFFEFDFC 0102FDFC")
+    {:notification, <<1, 2, 3, 4>>, <<255, 254, 253, 252>>, <<1, 2, 253, 252>>}
+
+    iex> Numato.Responses.parse("id set 12345678")
+    :echo
+
+    iex> Numato.Responses.parse("gpio set 1")
+    :echo
+
+    iex> Numato.Responses.parse("gpio clear H")
+    :echo
+
+    iex> Numato.Responses.parse("gpio read 1")
+    :echo
+
+    iex> Numato.Responses.parse("gpio iomask FF01FE02")
+    :echo
+
+    iex> Numato.Responses.parse("gpio iodir FF01FE02")
+    :echo
+
+    iex> Numato.Responses.parse("gpio readall")
+    :echo
+
+    iex> Numato.Responses.parse("gpio writeall 12345678")
+    :echo
+
+    iex> Numato.Responses.parse("gpio notify on")
+    :echo
+
+    iex> Numato.Responses.parse("gpio notify off")
+    :echo
+
+    iex> Numato.Responses.parse("gpio notify get")
+    :echo
+
+    iex> Numato.Responses.parse("adc read A")
+    :echo
+
+    iex> Numato.Responses.parse("gpi123456789 read")
+    :error
   """
-  def parse_ver(line) do
-    String.trim(line)
-  end
 
-  @doc ~S"""
-  Parsers result of id get command.
+  def parse(line) do
+    lexemes = String.split(line)
+    tokens = lexemes |> Enum.map(&recognize_token/1) |> Enum.to_list()
 
-  ## Examples
-
-    iex> Numato.Responses.parse_id_get("12345678\n")
-    "12345678"
-
-    iex> Numato.Responses.parse_id_get("123")
-    {:error, "Invalid Numato id: expected 8 characters, got 3"}
-  """
-  def parse_id_get(line) do
-    result = String.trim(line)
-
-    case String.length(result) do
-      8 -> result
-      length -> {:error, "Invalid Numato id: expected 8 characters, got #{length}"}
+    case tokens do
+      # Version -> {:version, "1.2.3"}
+      [{:id, token}] -> {:id, token}
+      [:on] -> :on
+      [:off] -> :off
+      [{:hex, token}] -> {:bits, parse_hex(token)}
+      [{:int, token}] -> {:int, parse_int(token)}
+      [{:hex, previous_token}, {:hex, current_token}, {:hex, iodir_token}] ->
+        {:notification, parse_hex(previous_token), parse_hex(current_token), parse_hex(iodir_token)}
+      [:id, :set, {:id, _}] -> :echo
+      [:id, :set, {:hex, _}] -> :echo
+      [:gpio, :set, {:int, _}] -> :echo
+      [:gpio, :clear, {:int, _}] -> :echo
+      [:gpio, :read, {:int, _}] -> :echo
+      [:gpio, :iomask, {:hex, _}] -> :echo
+      [:gpio, :iodir, {:hex, _}] -> :echo
+      [:gpio, :readall] -> :echo
+      [:gpio, :writeall, {:hex, _}] -> :echo
+      [:gpio, :notify, :on] -> :echo
+      [:gpio, :notify, :off] -> :echo
+      [:gpio, :notify, :get] -> :echo
+      [:adc, :read, {:int, _}] -> :echo
+      [{:any, version}] -> {:version, version}
+      _ -> :error
     end
   end
 
-  @doc ~S"""
-  Parses result of the gpio read command.
+  def recognize_token("gpio"), do: :gpio
+  def recognize_token("id"), do: :id
+  def recognize_token("set"), do: :set
+  def recognize_token("get"), do: :get
+  def recognize_token("on"), do: :on
+  def recognize_token("off"), do: :off
+  def recognize_token("clear"), do: :clear
+  def recognize_token("read"), do: :read
+  def recognize_token("iodir"), do: :iodir
+  def recognize_token("iomask"), do: :iomask
+  def recognize_token("readall"), do: :readall
+  def recognize_token("writeall"), do: :writeall
+  def recognize_token("notify"), do: :notify
+  def recognize_token("adc"), do: :adc
 
-  ## Examples
+  def recognize_token(lexeme) when is_bitstring(lexeme) and byte_size(lexeme) == 8 do
+    is_hex = lexeme
+      |> to_charlist()
+      |> Enum.all?(fn c -> (c >= ?0 and c <= ?9) or (c >= ?A and c <= ?F)  or (c >= ?a and c <= ?f) end)
 
-    iex> Numato.Responses.parse_gpio_read("on")
-    1
-
-    iex> Numato.Responses.parse_gpio_read("off\r")
-    0
-
-    iex> Numato.Responses.parse_gpio_read("true")
-    {:error, "Invalid Numato gpio read result: expected 'on' or 'off', got 'true'"}
-  """
-  def parse_gpio_read(line) do
-    case String.trim(line) do
-      "on"  -> 1
-      "off" -> 0
-      other -> {:error, "Invalid Numato gpio read result: expected 'on' or 'off', got '#{other}'"}
-    end
-  end
-
-  @doc ~S"""
-  Parses result of the gpio readall command and converts it to bitstring, where each
-  bit represents one GPIO.
-
-  ## Examples
-
-    iex> Numato.Responses.parse_gpio_readall("FAFBFCFD\n")
-    <<250, 251, 252, 253>>
-
-    iex> Numato.Responses.parse_gpio_readall("00010203\r\n")
-    <<0, 1, 2, 3>>
-
-    iex> Numato.Responses.parse_gpio_readall("12AZ")
-    {:error, "Invalid hex value: expected 8 characters, got 4"}
-  """
-  def parse_gpio_readall(line) do
-    String.trim(line) |> parse_hex_value()
-  end
-
-  @doc ~S"""
-  Parses result of the gpio notification and converts it to tuple with three properties:
-  - current value (bitstring)
-  - previous value (bitstring)
-  - iodir
-
-  ## Examples
-
-    iex> Numato.Responses.parse_gpio_notify_event("01020304 05060708 FAFBFCFD\r\n")
-    {<<1, 2, 3, 4>>, <<5, 6, 7, 8>>, <<250, 251, 252, 253>>}
-
-    iex> Numato.Responses.parse_gpio_notify_event("0010123")
-    {:error, "Invalid notification format: expected three 32-bit hexadecimal integers"}
-  """
-  def parse_gpio_notify_event(line) do
-    parts = String.split(line) |> Enum.map(&parse_hex_value/1)
-    case parts do
-      [current, previous, iodir] when is_bitstring(current) and is_bitstring(previous) and is_bitstring(iodir)
-        -> {current, previous, iodir}
-      _ -> {:error, "Invalid notification format: expected three 32-bit hexadecimal integers"}
-    end
-  end
-
-  @doc ~S"""
-  Parses result of the gpio notify command.
-
-  ## Examples
-
-    iex> Numato.Responses.parse_gpio_notify_status("on")
-    true
-
-    iex> Numato.Responses.parse_gpio_notify_status("off\r\n")
-    false
-
-    iex> Numato.Responses.parse_gpio_notify_status("true")
-    {:error, "Invalid notify status: expected 'on' or 'off', got 'true'"}
-  """
-  def parse_gpio_notify_status(line) do
-    trimmed = String.trim(line)
-    case trimmed do
-      "on"  -> true
-      "off" -> false
-      other -> {:error, "Invalid notify status: expected 'on' or 'off', got '#{other}'"}
-    end
-  end
-
-  @doc ~S"""
-  Parses result of the adc read command and returns and integer in range [0..1023]
-
-  ## Examples
-
-    iex> Numato.Responses.parse_adc_read("1")
-    1
-
-    iex> Numato.Responses.parse_adc_read("1023")
-    1023
-
-    iex> Numato.Responses.parse_adc_read("2048")
-    {:error, "Invalid adc value: expected integer between 0 and 1023, got '2048'"}
-  """
-  def parse_adc_read(line) do
-    value = line |> String.trim() |> String.to_integer()
-    if value >= 0 and value <= 1023 do
-      value
+    if is_hex do
+      {:hex, lexeme}
     else
-      {:error, "Invalid adc value: expected integer between 0 and 1023, got '#{line}'"}
+      {:id, lexeme}
     end
   end
 
-  defp parse_hex_value(value) do
-    case String.length(value) do
-      8     -> <<String.to_integer(value, 16)::size(32)>>
-      length -> {:error, "Invalid hex value: expected 8 characters, got #{length}"}
+  def recognize_token(lexeme) when is_bitstring(lexeme) and byte_size(lexeme) == 1 do
+    [x] = to_charlist(lexeme)
+    if (x >= ?0 and x <= ?9) or (x >= ?A and x <= ?Z) do
+      {:int, lexeme}
+    else
+      :error
     end
+  end
+
+  def recognize_token(lexeme) when is_bitstring(lexeme) and byte_size(lexeme) <= 4 do
+    is_int = lexeme
+      |> to_charlist()
+      |> Enum.all?(fn c -> c >= ?0 and c <= ?9 end)
+
+    if is_int do
+      {:int, lexeme}
+    else
+      :error
+    end
+  end
+
+  def recognize_token(lexeme) do
+    {:any, lexeme}
+  end
+
+  defp parse_hex(value) do
+    <<String.to_integer(value, 16)::size(32)>>
+  end
+
+  defp parse_int(value) do
+    String.to_integer(value)
   end
 end
