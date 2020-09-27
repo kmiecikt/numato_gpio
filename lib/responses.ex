@@ -4,17 +4,14 @@ defmodule Numato.Responses do
 
   ## Examples
 
-    iex> Numato.Responses.parse("1.2.3\r\n")
-    {:version, "1.2.3"}
-
     iex> Numato.Responses.parse("ABCDZDFF")
     {:id, "ABCDZDFF"}
 
-    iex> Numato.Responses.parse("on")
-    :on
+    iex> Numato.Responses.parse("gpio notify enabled")
+    {:notify, true}
 
-    iex> Numato.Responses.parse("off")
-    :off
+    iex> Numato.Responses.parse("gpio notify disabled")
+    {:notify, false}
 
     iex> Numato.Responses.parse("0102FFFE")
     {:bits, <<1, 2, 255, 254>>}
@@ -25,7 +22,13 @@ defmodule Numato.Responses do
     iex> Numato.Responses.parse("01020304 FFFEFDFC 0102FDFC")
     {:notification, <<1, 2, 3, 4>>, <<255, 254, 253, 252>>, <<1, 2, 253, 252>>}
 
+    iex> Numato.Responses.parse("ver")
+    :echo
+
     iex> Numato.Responses.parse("id set 12345678")
+    :echo
+
+    iex> Numato.Responses.parse("id get")
     :echo
 
     iex> Numato.Responses.parse("gpio set 1")
@@ -61,25 +64,32 @@ defmodule Numato.Responses do
     iex> Numato.Responses.parse("adc read A")
     :echo
 
+    iex> Numato.Responses.parse(">")
+    :echo
+
     iex> Numato.Responses.parse("gpi123456789 read")
     :error
   """
 
   def parse(line) do
-    lexemes = String.split(line)
-    tokens = lexemes |> Enum.map(&recognize_token/1) |> Enum.to_list()
+    lexemes = String.trim(line) |> String.trim(">") |> String.split()
+    tokens = lexemes
+      |> Enum.map(&recognize_token/1)
+      |> Enum.filter(fn t -> t != :prompt end)
+      |> Enum.to_list()
 
     case tokens do
-      # Version -> {:version, "1.2.3"}
       [{:id, token}] -> {:id, token}
-      [:on] -> :on
-      [:off] -> :off
+      [:gpio, :notify, :enabled] -> {:notify, true}
+      [:gpio, :notify, :disabled] -> {:notify, false}
       [{:hex, token}] -> {:bits, parse_hex(token)}
       [{:int, token}] -> {:int, parse_int(token)}
       [{:hex, previous_token}, {:hex, current_token}, {:hex, iodir_token}] ->
         {:notification, parse_hex(previous_token), parse_hex(current_token), parse_hex(iodir_token)}
+      [:ver] -> :echo
       [:id, :set, {:id, _}] -> :echo
       [:id, :set, {:hex, _}] -> :echo
+      [:id, :get] -> :echo
       [:gpio, :set, {:int, _}] -> :echo
       [:gpio, :clear, {:int, _}] -> :echo
       [:gpio, :read, {:int, _}] -> :echo
@@ -91,17 +101,20 @@ defmodule Numato.Responses do
       [:gpio, :notify, :off] -> :echo
       [:gpio, :notify, :get] -> :echo
       [:adc, :read, {:int, _}] -> :echo
-      [{:any, version}] -> {:version, version}
+      [] -> :echo
       _ -> :error
     end
   end
 
+  def recognize_token("ver"), do: :ver
   def recognize_token("gpio"), do: :gpio
   def recognize_token("id"), do: :id
   def recognize_token("set"), do: :set
   def recognize_token("get"), do: :get
   def recognize_token("on"), do: :on
   def recognize_token("off"), do: :off
+  def recognize_token("enabled"), do: :enabled
+  def recognize_token("disabled"), do: :disabled
   def recognize_token("clear"), do: :clear
   def recognize_token("read"), do: :read
   def recognize_token("iodir"), do: :iodir
@@ -110,6 +123,7 @@ defmodule Numato.Responses do
   def recognize_token("writeall"), do: :writeall
   def recognize_token("notify"), do: :notify
   def recognize_token("adc"), do: :adc
+  def recognize_token(">"), do: :prompt
 
   def recognize_token(lexeme) when is_bitstring(lexeme) and byte_size(lexeme) == 8 do
     is_hex = lexeme
