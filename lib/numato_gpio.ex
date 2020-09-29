@@ -1,22 +1,28 @@
 defmodule Numato.Gpio do
   use GenStage
 
-  def start_link(com_pid) do
-    GenStage.start_link(__MODULE__, com_pid)
+  defmodule State do
+    defstruct [
+      uart_pid: nil,
+      last_command: nil
+    ]
   end
 
-  def init(com_pid) when is_pid(com_pid) do
-    {:producer, %Numato.State {com_pid: com_pid}}
+  def start_link(uart_pid) do
+    GenStage.start_link(__MODULE__, uart_pid)
+  end
+
+  def init(uart_pid) when is_pid(uart_pid) do
+    {:producer, %State{uart_pid: uart_pid}}
   end
 
   def init(com_port) when is_bitstring(com_port) do
-    {:ok, com_pid} = Circuits.UART.start_link()
-    :ok = Circuits.UART.open(com_pid, com_port,
+    {:ok, uart_pid} = Circuits.UART.start_link()
+    :ok = Circuits.UART.open(uart_pid, com_port,
       speed: 115200,
       active: true,
-      # framing: {Circuits.UART.Framing.Line, separator: "\n"})
       framing: {Numato.UART.Framing, separator: "\r\n"})
-    {:producer, %Numato.State{com_pid: com_pid}}
+    {:producer, %State{uart_pid: uart_pid}}
   end
 
   def handle_demand(_demand, state) do
@@ -198,19 +204,19 @@ defmodule Numato.Gpio do
         {:noreply, events, new_state}
       _ ->
         :ok = reply_to_command(state.last_command, response)
-        {:noreply, [], %Numato.State{state | last_command: nil}}
+        {:noreply, [], %State{state | last_command: nil}}
     end
   end
 
   defp send_info(command_text, state) do
-    response = Circuits.UART.write(state.com_pid, command_text)
-    {:reply, response, [], %Numato.State{state | last_command: nil}}
+    response = Circuits.UART.write(state.uart_pid, command_text)
+    {:reply, response, [], %State{state | last_command: nil}}
   end
 
   defp send_call(command_text, command_tuple, state) do
-    case Circuits.UART.write(state.com_pid, command_text) do
-      :ok -> {:noreply, [], %Numato.State{state | last_command: command_tuple}}
-      error -> {:reply, error, [], %Numato.State{state | last_command: nil}}
+    case Circuits.UART.write(state.uart_pid, command_text) do
+      :ok -> {:noreply, [], %State{state | last_command: command_tuple}}
+      error -> {:reply, error, [], %State{state | last_command: nil}}
     end
   end
 
