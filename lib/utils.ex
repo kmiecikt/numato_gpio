@@ -5,13 +5,13 @@ defmodule Numato.Utils do
   ## Examples
 
     iex> Numato.Utils.get_changed_ports(<<0xFF>>, <<0xFE>>, <<0xFF>>)
-    [{0, :off}]
+    [{0, 0}]
 
     iex> Numato.Utils.get_changed_ports(<<0xFC>>, <<0xFF>>, <<0xFF>>)
-    [{0, :on}, {1, :on}]
+    [{0, 1}, {1, 1}]
 
     iex> Numato.Utils.get_changed_ports(<<0xFC>>, <<0xFF>>, <<0x01>>)
-    [{0, :on}]
+    [{0, 1}]
   """
   def get_changed_ports(previous, current, iodir) do
     get_changes(previous, current, iodir, bit_size(previous) - 1, [])
@@ -32,8 +32,8 @@ defmodule Numato.Utils do
 
   defp detect_change(p, c, 1, position, result) do
     case {p, c} do
-      {1, 0} -> [{position, :off} | result]
-      {0, 1} -> [{position, :on} | result]
+      {1, 0} -> [{position, 0} | result]
+      {0, 1} -> [{position, 1} | result]
       _ -> result
     end
   end
