@@ -221,7 +221,8 @@ defmodule Numato.Gpio do
   end
 
   defp process_notification(previous, current, iodir, state) do
-    {[{:notification, previous, current, iodir}], state}
+    changes = Numato.Utils.get_changed_ports(previous, current, iodir)
+    {[{:notification, changes}], state}
   end
 
   defp reply_to_command({:gpio_read, from}, {:int, value}) when value == 0 or value == 1 do
