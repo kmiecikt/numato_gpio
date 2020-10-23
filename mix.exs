@@ -18,7 +18,8 @@ defmodule NumatoGpio.MixProject do
   defp deps do
     [
       {:gen_stage, "~> 1.0.0"},
-      {:circuits_uart, "~> 1.3"}
+      {:circuits_uart, "~> 1.3"},
+      {:ex_doc, "~> 0.14", only: :dev, runtime: false}
     ]
   end
 
