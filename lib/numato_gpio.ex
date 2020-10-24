@@ -252,4 +252,8 @@ defmodule Numato.Gpio do
   defp reply_to_command({:gpio_notify_get, from}, {:notify, value}) do
     GenStage.reply(from, value)
   end
+
+  defp reply_to_command(nil, _) do
+    :ok
+  end
 end
