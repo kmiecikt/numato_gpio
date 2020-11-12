@@ -24,10 +24,10 @@ To start the process, you need to know a virtual COM port name associated with t
 iex> {:ok, pid} = Numato.Gpio.start_link("ttyACM0")
 {:ok, #Reference<...>}
 
-iex> Numato.Gpio.write(pid, 1, 1)
+iex> Numato.Gpio.gpio_write(pid, 1, 1)
 :ok
 
-iex> Numato.Gpio.read(pid, 2)
+iex> Numato.Gpio.gpio_read(pid, 2)
 0
 ```
 

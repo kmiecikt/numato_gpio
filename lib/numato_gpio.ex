@@ -169,14 +169,14 @@ defmodule Numato.Gpio do
     send_call(command_text, {:gpio_readall, from}, state)
   end
 
-  def handle_call(:gpio_notify_on, _from , state) do
+  def handle_call(:gpio_notify_on, from , state) do
     command_text = Numato.Commands.gpio_notify_on()
-    send_info(command_text, state)
+    send_call(command_text, {:gpio_notify_on, from}, state)
   end
 
-  def handle_call(:gpio_notify_off, _from, state) do
+  def handle_call(:gpio_notify_off, from, state) do
     command_text = Numato.Commands.gpio_notify_off()
-    send_info(command_text, state)
+    send_call(command_text, {:gpio_notify_off, from}, state)
   end
 
   def handle_call(:gpio_notify_get, from, state) do
@@ -250,6 +250,14 @@ defmodule Numato.Gpio do
   end
 
   defp reply_to_command({:gpio_notify_get, from}, {:notify, value}) do
+    GenStage.reply(from, value)
+  end
+
+  defp reply_to_command({:gpio_notify_on, from}, {:notify, value}) do
+    GenStage.reply(from, value)
+  end
+
+  defp reply_to_command({:gpio_notify_off, from}, {:notify, value}) do
     GenStage.reply(from, value)
   end
 
